@@ -1,55 +1,58 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const Stripe = require("stripe");
-
-dotenv.config();
+import express from "express";
+import Stripe from "stripe";
+import cors from "cors";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-const CLIENT_URL = process.env.CLIENT_URL;
+/* TEST ROUTE */
+app.get("/", (req, res) => {
+  res.send("Stripe backend running");
+});
 
-// 🔥 Create Stripe Checkout Session
+/* STRIPE CHECKOUT */
 app.post("/create-checkout-session", async (req, res) => {
   try {
-    const { amount, bookingId } = req.body;
+    const { name, date, time, price } = req.body;
+
+    if (!name || !date || !time || !price) {
+      return res.status(400).json({ error: "Missing booking data" });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode: "payment",
+
       line_items: [
         {
           price_data: {
             currency: "sek",
             product_data: {
-              name: "Haircut Booking"
+              name: `Klippning ${date} ${time}`,
             },
-            unit_amount: amount * 100
+            unit_amount: price * 100, // Stripe använder ören
           },
-          quantity: 1
-        }
+          quantity: 1,
+        },
       ],
-      success_url: `${CLIENT_URL}/mybookings.html?success=true&bookingId=${bookingId}`,
-      cancel_url: `${CLIENT_URL}/booking.html?canceled=true`
+
+      mode: "payment",
+
+      success_url: `https://hcbokning.se/mybookings.html?paid=true&name=${name}&date=${date}&time=${time}&price=${price}`,
+
+      cancel_url: `https://hcbokning.se/payment.html`,
     });
 
     res.json({ url: session.url });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Payment failed" });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Stripe error" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Stripe backend running");
-});
-
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+app.listen(3000, () => {
+  console.log("Server running on port 3000");
 });
